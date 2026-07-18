@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>進捗管理</title>
+  <!-- Tailwind CSS (スタイリング用) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js (グラフ描画用) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* スマホでのタップハイライトを無効化 */
+    * { -webkit-tap-highlight-color: transparent; }
+    body { background-color: #f8fafc; color: #334155; }
+  </style>
+</head>
+<body class="pb-20">
+
+  <div class="max-w-lg mx-auto p-4 space-y-6">
+    <!-- ヘッダー -->
+    <header class="text-center pb-2 border-b-2 border-blue-500">
+      <h1 class="text-xl font-bold text-slate-800">問題集 進捗管理</h1>
+      <a href="Math.html">タイルへ</a>
+    </header>
+
+    <!-- ステータス表示エリア -->
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 text-center">
+        <p class="text-xs text-slate-500 mb-1">残り問題数 / 全体</p>
+        <p class="text-xl font-bold text-blue-600"><span id="stat-remaining">-</span> <span class="text-sm text-slate-400">/ <span id="stat-total">-</span></span></p>
+      </div>
+      <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 text-center">
+        <p class="text-xs text-slate-500 mb-1">目標に対する状態</p>
+        <p class="text-lg font-bold" id="stat-diff">-</p>
+      </div>
+      <div class="col-span-2 bg-blue-50 p-3 rounded-xl shadow-sm border border-blue-100 text-center flex justify-between items-center px-4">
+        <span class="text-sm text-blue-800">目標達成に必要なペース</span>
+        <span class="text-lg font-bold text-blue-600"><span id="stat-pace">-</span> <span class="text-sm">問/日</span></span>
+      </div>
+    </div>
+
+    <!-- グラフエリア -->
+    <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-200 relative w-full h-72">
+      <canvas id="progressChart"></canvas>
+    </div>
+
+    <!-- 記録入力エリア -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <h2 class="text-md font-bold mb-3 border-l-4 border-blue-500 pl-2">今日の記録</h2>
+      <form id="record-form" class="flex space-x-2">
+        <input type="date" id="input-date" class="border border-slate-300 rounded p-2 flex-1 focus:ring-2 focus:ring-blue-400 outline-none" required>
+        <input type="number" id="input-count" placeholder="解いた数" min="0" class="border border-slate-300 rounded p-2 w-24 focus:ring-2 focus:ring-blue-400 outline-none" required>
+        <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition">記録</button>
+      </form>
+    </div>
+
+    <!-- 履歴・編集エリア -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <h2 class="text-md font-bold mb-3 border-l-4 border-blue-500 pl-2">過去の履歴（編集・削除）</h2>
+      <div class="max-h-40 overflow-y-auto">
+        <table class="w-full text-sm text-left">
+          <tbody id="history-list" class="divide-y divide-slate-100">
+            <!-- 履歴がここにJavaScriptで生成されます -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 設定・バックアップエリア -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-md font-bold border-l-4 border-slate-500 pl-2">設定・バックアップ</h2>
+      
+      <div class="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <label class="block text-slate-500 mb-1">全問題数</label>
+          <input type="number" id="setting-total" class="border rounded p-1 w-full">
+        </div>
+        <div>
+          <label class="block text-slate-500 mb-1">開始日</label>
+          <input type="date" id="setting-start" class="border rounded p-1 w-full">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-slate-500 mb-1">目標完了日</label>
+          <input type="date" id="setting-end" class="border rounded p-1 w-full">
+        </div>
+        <button id="btn-save-settings" class="col-span-2 bg-slate-200 text-slate-700 py-1 rounded mt-1 font-bold">設定を更新</button>
+      </div>
+
+      <hr class="border-slate-100">
+
+      <div class="flex space-x-2">
+        <button id="btn-export" class="flex-1 bg-green-50 text-green-700 border border-green-200 py-2 rounded text-sm font-bold">バックアップ(コピー)</button>
+        <button id="btn-import" class="flex-1 bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded text-sm font-bold">復元(ペースト)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 状態管理 (localStorage) ---
+    const STORAGE_KEY = 'seminar_chemistry_progress';
+    let appData = {
+      totalProblems: 340,
+      startDate: '2026-03-11',
+      endDate: '2026-03-27',
+      records: {} // { "YYYY-MM-DD": 20 }
+    };
+
+    let chartInstance = null;
+
+    // 初期化
+    function init() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try { appData = JSON.parse(saved); } catch (e) {}
+      }
+      
+      // 今日の日付をデフォルトセット
+      const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD形式
+      document.getElementById('input-date').value = today;
+      
+      // 設定フォームに反映
+      document.getElementById('setting-total').value = appData.totalProblems;
+      document.getElementById('setting-start').value = appData.startDate;
+      document.getElementById('setting-end').value = appData.endDate;
+
+      updateUI();
+    }
+
+    // データ保存
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      updateUI();
+    }
+
+    // 日付計算ユーティリティ
+    function getDatesBetween(start, end) {
+      let dates = [];
+      let curr = new Date(start);
+      const last = new Date(end);
+      while (curr <= last) {
+        dates.push(curr.toLocaleDateString('sv-SE'));
+        curr.setDate(curr.getDate() + 1);
+      }
+      return dates;
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    }
+
+    // UI一斉更新（グラフ、統計、履歴）
+    function updateUI() {
+      const total = parseInt(appData.totalProblems);
+      let totalSolved = 0;
+      
+      // 履歴の更新と集計
+      const historyList = document.getElementById('history-list');
+      historyList.innerHTML = '';
+      
+      // 日付の降順でソート
+      const sortedDates = Object.keys(appData.records).sort((a, b) => new Date(b) - new Date(a));
+      
+      sortedDates.forEach(date => {
+        const count = appData.records[date];
+        totalSolved += count;
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="py-2 px-1 font-medium text-slate-700">${formatDate(date)}</td>
+          <td class="py-2 px-1 text-blue-600 font-bold">${count} 問</td>
+          <td class="py-2 px-1 text-right">
+            <button onclick="deleteRecord('${date}')" class="text-red-400 text-xs border border-red-200 px-2 py-1 rounded hover:bg-red-50">削除</button>
+          </td>
+        `;
+        historyList.appendChild(tr);
+      });
+
+      if(sortedDates.length === 0) {
+        historyList.innerHTML = '<tr><td class="py-4 text-center text-slate-400 text-xs" colspan="3">記録がありません</td></tr>';
+      }
+
+      const remaining = Math.max(0, total - totalSolved);
+      
+      // 統計情報の更新
+      document.getElementById('stat-total').innerText = total;
+      document.getElementById('stat-remaining').innerText = remaining;
+
+      // グラフ用データ計算とペーシング
+      const allDates = getDatesBetween(appData.startDate, appData.endDate);
+      const todayStr = new Date().toLocaleDateString('sv-SE');
+      
+      // 今日の日付が設定期間を過ぎている場合はグラフを延長
+      if (new Date(todayStr) > new Date(appData.endDate)) {
+          const extraDates = getDatesBetween(appData.endDate, todayStr);
+          extraDates.shift(); // endDateの重複を削除
+          allDates.push(...extraDates);
+      }
+
+      const labels = allDates.map(formatDate);
+      const targetData = [];
+      const actualData = [];
+      
+      const totalDays = getDatesBetween(appData.startDate, appData.endDate).length - 1;
+      let currentRemaining = total;
+      
+      let currentTargetRemaining = total; // 今日の目標残り問題数
+      let todayPassed = false;
+
+      allDates.forEach((date, index) => {
+        // 目標線（線形補間）
+        let target = total;
+        if (new Date(date) <= new Date(appData.endDate)) {
+            target = total - (total / totalDays) * index;
+        } else {
+            target = 0;
+        }
+        targetData.push(Math.max(0, target));
+
+        // 実績線
+        if (new Date(date) <= new Date(todayStr) || appData.records[date]) {
+          if (appData.records[date]) {
+            currentRemaining -= appData.records[date];
+          }
+          actualData.push(Math.max(0, currentRemaining));
+          
+          if (date === todayStr) {
+            currentTargetRemaining = target;
+            todayPassed = true;
+          }
+        }
+      });
+
+      // 状態判定 (遅れ・進み)
+      const diffEl = document.getElementById('stat-diff');
+      if (remaining === 0) {
+        diffEl.innerHTML = '<span class="text-green-500">完了！🎉</span>';
+      } else {
+        const diff = currentTargetRemaining - remaining;
+        if (diff > 0) {
+          diffEl.innerHTML = `<span class="text-green-500">▲ ${Math.abs(Math.round(diff))} 問 リード</span>`;
+        } else if (diff < 0) {
+          diffEl.innerHTML = `<span class="text-red-500">▼ ${Math.abs(Math.round(diff))} 問 遅れ</span>`;
+        } else {
+          diffEl.innerHTML = `<span class="text-slate-500">ピッタリ</span>`;
+        }
+      }
+
+      // 残り必要ペース計算
+      const remainingDaysToTarget = Math.ceil((new Date(appData.endDate) - new Date(todayStr)) / (1000 * 60 * 60 * 24));
+      const paceEl = document.getElementById('stat-pace');
+      if (remaining <= 0) {
+        paceEl.innerText = '0';
+      } else if (remainingDaysToTarget > 0) {
+        paceEl.innerText = (remaining / remainingDaysToTarget).toFixed(1);
+      } else {
+        paceEl.innerText = '期限超過';
+      }
+
+      renderChart(labels, targetData, actualData);
+    }
+
+    // グラフ描画
+    function renderChart(labels, targetData, actualData) {
+      const ctx = document.getElementById('progressChart').getContext('2d');
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '実績 (残り)',
+              data: actualData,
+              borderColor: '#3b82f6', // 実線の青
+              backgroundColor: '#3b82f6',
+              borderWidth: 3,
+              tension: 0,
+              pointRadius: 2,
+              stepped: false
+            },
+            {
+              label: '目標',
+              data: targetData,
+              borderColor: '#cbd5e1', // 破線のグレー
+              borderWidth: 2,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false,
+              tension: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { min: 0, suggestedMax: appData.totalProblems },
+            x: { ticks: { maxTicksLimit: 6 } }
+          },
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 12, usePointStyle: true } }
+          }
+        }
+      });
+    }
+
+    // イベント: 記録追加・更新
+    document.getElementById('record-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const date = document.getElementById('input-date').value;
+      const count = parseInt(document.getElementById('input-count').value);
+      
+      if (date && !isNaN(count)) {
+        appData.records[date] = count;
+        saveData();
+        document.getElementById('input-count').value = ''; // 入力欄クリア
+      }
+    });
+
+    // レコード削除（グローバル関数として定義）
+    window.deleteRecord = function(date) {
+      if(confirm(`${date} の記録を削除しますか？`)) {
+        delete appData.records[date];
+        saveData();
+      }
+    };
+
+    // イベント: 設定更新
+    document.getElementById('btn-save-settings').addEventListener('click', function() {
+      const t = parseInt(document.getElementById('setting-total').value);
+      const s = document.getElementById('setting-start').value;
+      const e = document.getElementById('setting-end').value;
+      if(t && s && e) {
+        appData.totalProblems = t;
+        appData.startDate = s;
+        appData.endDate = e;
+        saveData();
+        alert('設定を保存しました');
+      }
+    });
+
+    // イベント: エクスポート
+    document.getElementById('btn-export').addEventListener('click', function() {
+      const dataStr = JSON.stringify(appData);
+      navigator.clipboard.writeText(dataStr).then(() => {
+        alert('データをクリップボードにコピーしました！\nメモ帳などにペーストして保存してください。');
+      }).catch(err => {
+        alert('コピーに失敗しました。手動でコピーしてください: ' + dataStr);
+      });
+    });
+
+    // イベント: インポート
+    document.getElementById('btn-import').addEventListener('click', function() {
+      const json = prompt('バックアップしたテキスト（JSON）を貼り付けてください:\n※現在のデータは上書きされます');
+      if (json) {
+        try {
+          const parsed = JSON.parse(json);
+          if (parsed.totalProblems && parsed.records) {
+            appData = parsed;
+            saveData();
+            // 入力欄も更新
+            document.getElementById('setting-total').value = appData.totalProblems;
+            document.getElementById('setting-start').value = appData.startDate;
+            document.getElementById('setting-end').value = appData.endDate;
+            alert('データを復元しました。');
+          } else {
+            alert('無効なデータ形式です。');
+          }
+        } catch(e) {
+          alert('読み込みエラー: 正しいテキストが入力されていません。');
+        }
+      }
+    });
+
+    // アプリ起動
+    init();
+  </script>
+</body>
+</html>

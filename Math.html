@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数学 進捗管理</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* スマホでのタップ時の青いハイライトを無効化 */
+    * { -webkit-tap-highlight-color: transparent; }
+    body { background-color: #f8fafc; color: #334155; }
+    
+    /* ステータスに応じたタイルの配色定義 */
+    .status-0 { background-color: #ffffff; border-color: #cbd5e1; color: #475569; } /* 未習: 白 */
+    .status-1 { background-color: #fde047; border-color: #facc15; color: #854d0e; } /* 予習: 黄 */
+    .status-2 { background-color: #4ade80; border-color: #22c55e; color: #14532d; } /* 授業: 緑 */
+    .status-3 { background-color: #60a5fa; border-color: #3b82f6; color: #1e3a8a; } /* 復習(青): 青 */
+    
+    /* タイルのベーススタイル */
+    .tile {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-width: 2px;
+      border-radius: 0.5rem;
+      font-weight: bold;
+      font-size: 1.125rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s;
+    }
+    .tile:active { transform: scale(0.95); }
+  </style>
+</head>
+<body class="pb-20">
+
+  <div class="max-w-lg mx-auto p-4 space-y-6">
+    <!-- ヘッダー -->
+    <header class="text-center pb-2 border-b-2 border-slate-400">
+      <h1 class="text-xl font-bold text-slate-800">数学 進捗管理</h1>
+      <a href="index.html">数値へ</a>
+    </header>
+
+    <!-- 凡例 (Legend) -->
+    <div class="flex justify-center space-x-3 text-xs sm:text-sm bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+      <div class="flex items-center"><span class="w-4 h-4 rounded border border-slate-300 bg-white mr-1 block"></span>未習</div>
+      <div class="flex items-center"><span class="w-4 h-4 rounded border border-yellow-400 bg-yellow-300 mr-1 block"></span>予習</div>
+      <div class="flex items-center"><span class="w-4 h-4 rounded border border-green-500 bg-green-400 mr-1 block"></span>授業</div>
+      <div class="flex items-center"><span class="w-4 h-4 rounded border border-blue-500 bg-blue-400 mr-1 block"></span>復習</div>
+    </div>
+
+    <!-- コンテンツ表示エリア (JSで自動生成) -->
+    <div id="app-container" class="space-y-8"></div>
+
+    <!-- 設定・バックアップエリア -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mt-12 space-y-4">
+      <h2 class="text-md font-bold border-l-4 border-slate-500 pl-2">設定・バックアップ</h2>
+      <div class="flex space-x-2">
+        <button id="btn-export" class="flex-1 bg-green-50 text-green-700 border border-green-200 py-2 rounded text-sm font-bold shadow-sm">バックアップ(コピー)</button>
+        <button id="btn-import" class="flex-1 bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded text-sm font-bold shadow-sm">復元(ペースト)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 状態管理 (localStorage) ---
+    const STORAGE_KEY = 'math_progress_data';
+    // appDataの構造: { "XS-Sec1-1": 1, "XS-Sec1-2": 0, ... } (値は 0:白, 1:黄, 2:緑, 3:青)
+    let appData = {};
+
+    // 構造定義 (XS: 4セクション, ZS: 3セクション)
+    const courseStructure = [
+      {
+        category: "XS",
+        sections: ["S1", "S2", "S3", "S4"]
+      },
+      {
+        category: "ZS",
+        sections: ["S1", "S2", "S3"]
+      }
+    ];
+
+    // 初期化
+    function init() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try { appData = JSON.parse(saved); } catch (e) { appData = {}; }
+      }
+      renderUI();
+    }
+
+    // データ保存
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    }
+
+    // タイルタップ時の処理
+    function handleTileClick(tileId) {
+      // 現在のステータスを取得（未定義なら0とする）
+      const currentStatus = appData[tileId] || 0;
+      // 0 -> 1 -> 2 -> 3 -> 0 の順でローテーション
+      const nextStatus = (currentStatus + 1) % 4;
+      
+      appData[tileId] = nextStatus;
+      saveData();
+      
+      // 対象のタイルのクラスだけを更新
+      const tileEl = document.getElementById(tileId);
+      tileEl.className = `tile status-${nextStatus}`;
+    }
+
+    // UIの構築・描画
+    function renderUI() {
+      const container = document.getElementById('app-container');
+      container.innerHTML = ''; // クリア
+
+      courseStructure.forEach(course => {
+        // カテゴリのコンテナ
+        const courseDiv = document.createElement('div');
+        courseDiv.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200';
+        
+        // カテゴリタイトル (XS / ZS)
+        const courseTitle = document.createElement('h2');
+        courseTitle.className = 'text-2xl font-bold text-slate-800 mb-4 border-b pb-1';
+        courseTitle.innerText = course.category;
+        courseDiv.appendChild(courseTitle);
+
+        // 各セクションの生成
+        course.sections.forEach(sec => {
+          const secDiv = document.createElement('div');
+          secDiv.className = 'mb-6 last:mb-0';
+          
+          // セクションタイトル
+          const secTitle = document.createElement('h3');
+          secTitle.className = 'text-lg font-bold text-slate-600 mb-2';
+          secTitle.innerText = `-${sec}-`;
+          secDiv.appendChild(secTitle);
+
+          // タイルのグリッドコンテナ (スマホで見やすいように5列配置)
+          const gridDiv = document.createElement('div');
+          gridDiv.className = 'grid grid-cols-5 gap-2 sm:gap-3';
+
+          // 20問分のタイルを生成
+          for (let i = 1; i <= 20; i++) {
+            const tileId = `${course.category}-${sec}-${i}`;
+            const status = appData[tileId] || 0;
+
+            const tile = document.createElement('div');
+            tile.id = tileId;
+            tile.className = `tile status-${status}`;
+            tile.innerText = i;
+            tile.onclick = () => handleTileClick(tileId);
+
+            gridDiv.appendChild(tile);
+          }
+          
+          secDiv.appendChild(gridDiv);
+          courseDiv.appendChild(secDiv);
+        });
+
+        container.appendChild(courseDiv);
+      });
+    }
+
+    // イベント: エクスポート（バックアップ）
+    document.getElementById('btn-export').addEventListener('click', function() {
+      const dataStr = JSON.stringify(appData);
+      navigator.clipboard.writeText(dataStr).then(() => {
+        alert('数学の進捗データをクリップボードにコピーしました！\nメモ帳やLINEなどにペーストして保存してください。');
+      }).catch(err => {
+        alert('コピーに失敗しました。');
+      });
+    });
+
+    // イベント: インポート（復元）
+    document.getElementById('btn-import').addEventListener('click', function() {
+      const json = prompt('バックアップしたテキストを貼り付けてください:\n※現在のデータは上書きされます');
+      if (json) {
+        try {
+          const parsed = JSON.parse(json);
+          appData = parsed;
+          saveData();
+          renderUI(); // 画面を再描画
+          alert('データを復元しました。');
+        } catch(e) {
+          alert('読み込みエラー: 正しいデータが入力されていません。');
+        }
+      }
+    });
+
+    // 起動
+    init();
+  </script>
+</body>
+</html>
