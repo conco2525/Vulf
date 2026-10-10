@@ -55,6 +55,99 @@
     <!-- コンテンツ表示エリア (JSで自動生成) -->
     <div id="app-container" class="space-y-8"></div>
 
+    <!-- ===== 進捗分析（追加機能） ===== -->
+    <section id="analysis" class="space-y-4 mt-12">
+      <h2 class="text-lg font-bold text-slate-800 border-b-2 border-slate-400 pb-1 text-center">進捗分析</h2>
+
+      <!-- 分析の設定 -->
+      <details open class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <summary class="p-4 text-md font-bold cursor-pointer border-l-4 border-indigo-500 rounded-xl">分析の設定</summary>
+        <div class="px-4 pb-4 space-y-3 text-sm">
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <label class="block font-bold text-slate-700 mb-1" for="an-lecture">1問の解説授業を見る平均時間（分）</label>
+            <input id="an-lecture" type="number" min="0" step="1" inputmode="numeric" class="w-full border border-slate-300 rounded px-2 py-1.5 text-base">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-600 mb-1" for="an-prep">1問の予習 平均（分）</label>
+              <input id="an-prep" type="number" min="0" step="1" inputmode="numeric" class="w-full border border-slate-300 rounded px-2 py-1.5 text-base">
+            </div>
+            <div>
+              <label class="block text-slate-600 mb-1" for="an-review">1問の復習 平均（分）</label>
+              <input id="an-review" type="number" min="0" step="1" inputmode="numeric" class="w-full border border-slate-300 rounded px-2 py-1.5 text-base">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-600 mb-1" for="an-start">開始日</label>
+              <input id="an-start" type="date" class="w-full border border-slate-300 rounded px-2 py-1.5 text-base">
+            </div>
+            <div>
+              <label class="block text-slate-600 mb-1" for="an-deadline">全問復習済みの期限</label>
+              <input id="an-deadline" type="date" class="w-full border border-slate-300 rounded px-2 py-1.5 text-base">
+            </div>
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1" for="an-daily">1日に使える学習時間（分）</label>
+            <input id="an-daily" type="number" min="0" step="5" inputmode="numeric" class="w-full border border-slate-300 rounded px-2 py-1.5 text-base">
+          </div>
+          <p class="text-xs text-slate-500">入力内容は自動保存されます。予習・復習の時間は、ペース判定と残り作業量の計算に使います。</p>
+        </div>
+      </details>
+
+      <!-- 全体の状況 -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-md font-bold border-l-4 border-slate-500 pl-2">全体の状況</h3>
+        <div id="an-overview"></div>
+      </div>
+
+      <!-- 授業視聴時間の概算 -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-md font-bold border-l-4 border-green-500 pl-2">授業視聴にかかる時間</h3>
+        <div id="an-lecture-card"></div>
+      </div>
+
+      <!-- 残りの作業量 -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-md font-bold border-l-4 border-blue-500 pl-2">残りの作業量（期限までに必要）</h3>
+        <div id="an-remaining"></div>
+      </div>
+
+      <!-- ペース判定 -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-md font-bold border-l-4 border-rose-500 pl-2">ペース判定</h3>
+        <div id="an-pace"></div>
+        <details class="text-xs text-slate-500">
+          <summary class="cursor-pointer">評価指標の考え方</summary>
+          <div class="mt-2 space-y-1 leading-relaxed">
+            <p>・進捗率は「完了した作業量（分）÷ 全作業量（分）」で計算します。予習・授業・復習の平均時間を重みにするので、時間が読みにくい工程も、設定した目安のぶんだけ反映されます。</p>
+            <p>・理想は、開始日から期限まで一定のペースで進む直線です。実績との差を「分」と「日数」で表します（日数 ＝ 差 ÷ 1日あたりの理想作業量）。</p>
+            <p>・実績ペースは、アプリを開いたときの記録から求めます。記録が3日以上たまると、直近7日のペースも出ます。</p>
+            <p>・平均時間は最初は目安でかまいません。実際にかかった時間に合わせて直すと、判定が正確になります。</p>
+          </div>
+        </details>
+      </div>
+
+      <!-- 直近7日 -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-md font-bold border-l-4 border-teal-500 pl-2">直近7日の進み具合</h3>
+        <div id="an-recent"></div>
+      </div>
+
+      <!-- セクション別 -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-md font-bold border-l-4 border-purple-500 pl-2">セクション別の状況</h3>
+        <div id="an-sections" class="space-y-3"></div>
+        <div id="an-hints" class="text-sm text-slate-600 space-y-1"></div>
+      </div>
+
+      <!-- 目安のマイルストーン -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-md font-bold border-l-4 border-orange-500 pl-2">期限から逆算した目安</h3>
+        <div id="an-milestones"></div>
+      </div>
+    </section>
+
     <!-- 設定・バックアップエリア -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mt-12 space-y-4">
       <h2 class="text-md font-bold border-l-4 border-slate-500 pl-2">設定・バックアップ</h2>
@@ -193,6 +286,348 @@
 
     // 起動
     init();
+  </script>
+  <!-- ===== 進捗分析（追加機能）: 既存のスクリプトには手を加えず、状態(appData)を読み取るだけ ===== -->
+  <script>
+  (function () {
+    const SKEY = 'math_analysis_settings';
+    const HKEY = 'math_analysis_history';
+    const DEF = { prep: 15, lecture: 10, review: 10, daily: 60, start: '', deadline: '' };
+    const $ = id => document.getElementById(id);
+
+    function load(k, d) {
+      try { const v = JSON.parse(localStorage.getItem(k)); return (v && typeof v === 'object') ? v : d; }
+      catch (e) { return d; }
+    }
+    let st = Object.assign({}, DEF, load(SKEY, {}));
+    let hist = load(HKEY, {}); // { 'YYYY-MM-DD': [未習数, 予習数, 授業数, 復習数] }
+
+    // ---- 日付ユーティリティ ----
+    const pad = n => String(n).padStart(2, '0');
+    const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const parse = s => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+    const dayDiff = (a, b) => Math.round((b - a) / 86400000);
+    const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    const md = d => `${d.getMonth() + 1}/${d.getDate()}`;
+    const WD = ['日', '月', '火', '水', '木', '金', '土'];
+    function fmt(m) {
+      m = Math.round(m);
+      if (m <= 0) return '0分';
+      const h = Math.floor(m / 60), r = m % 60;
+      return h ? (r ? `${h}時間${r}分` : `${h}時間`) : `${m}分`;
+    }
+
+    // ---- データ集計 ----
+    const sections = [];
+    courseStructure.forEach(c => c.sections.forEach(s => {
+      const ids = [];
+      for (let i = 1; i <= 20; i++) ids.push(`${c.category}-${s}-${i}`);
+      sections.push({ label: `${c.category}-${s}`, ids });
+    }));
+    const allIds = sections.flatMap(s => s.ids);
+    const N = allIds.length;
+
+    function countsOf(ids) {
+      const c = [0, 0, 0, 0];
+      ids.forEach(id => { const v = appData[id] || 0; c[v >= 0 && v <= 3 ? v : 0]++; });
+      return c;
+    }
+    // 工程ごとの所要時間（すべて0なら均等に扱う）
+    function costs() {
+      let p = Math.max(0, +st.prep || 0), l = Math.max(0, +st.lecture || 0), r = Math.max(0, +st.review || 0);
+      if (p + l + r <= 0) { p = l = r = 1; }
+      return { p, l, r, cum: [0, p, p + l, p + l + r] };
+    }
+    function minutesOf(c) {
+      const k = costs().cum;
+      return c[1] * k[1] + c[2] * k[2] + c[3] * k[3];
+    }
+
+    // ---- 履歴（日ごとの最新状態を保存） ----
+    function record() {
+      hist[ymd(new Date())] = countsOf(allIds);
+      const keys = Object.keys(hist).sort();
+      while (keys.length > 200) delete hist[keys.shift()];
+      try { localStorage.setItem(HKEY, JSON.stringify(hist)); } catch (e) {}
+    }
+    function stateAt(key) { // key 以前で最も新しい記録の作業量(分)
+      let base = null;
+      Object.keys(hist).sort().forEach(k => { if (k <= key) base = k; });
+      return base ? minutesOf(hist[base]) : null;
+    }
+    function recentPace(done, today) {
+      const keys = Object.keys(hist).sort();
+      if (keys.length < 2) return null;
+      const tkey = ymd(today), target = ymd(addDays(today, -7));
+      let base = null;
+      keys.forEach(k => { if (k <= target) base = k; });
+      if (!base) base = keys[0];
+      if (base >= tkey) return null;
+      const span = dayDiff(parse(base), today);
+      if (span < 3) return null;
+      return { pace: Math.max(0, (done - minutesOf(hist[base])) / span), span };
+    }
+
+    // ---- 表示部品 ----
+    function stackBar(c, n) {
+      const w = i => (c[i] / n * 100).toFixed(2);
+      return `<div class="flex w-full h-4 rounded-full overflow-hidden bg-slate-200 border border-slate-300">
+        <div class="bg-blue-400" style="width:${w(3)}%"></div>
+        <div class="bg-green-400" style="width:${w(2)}%"></div>
+        <div class="bg-yellow-300" style="width:${w(1)}%"></div></div>`;
+    }
+    function chip(cls, label, n) {
+      return `<div class="flex items-center text-xs"><span class="w-3.5 h-3.5 rounded border mr-1 ${cls}"></span>${label} <b class="ml-1 text-sm text-slate-800">${n}</b></div>`;
+    }
+    function stat(label, value, sub) {
+      return `<div class="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+        <div class="text-[11px] text-slate-500">${label}</div>
+        <div class="text-base font-bold text-slate-800">${value}</div>
+        ${sub ? `<div class="text-[11px] text-slate-500">${sub}</div>` : ''}</div>`;
+    }
+
+    // ---- 各カードの描画 ----
+    function render() {
+      const k = costs();
+      const c = countsOf(allIds);
+      const total = N * k.cum[3];
+      const done = minutesOf(c);
+      const rem = total - done;
+      const steps = c[0] * 3 + c[1] * 2 + c[2];
+      const today = parse(ymd(new Date()));
+
+      // 全体の状況
+      const stepPct = (N * 3 - steps) / (N * 3) * 100;
+      const timePct = total > 0 ? done / total * 100 : 0;
+      $('an-overview').innerHTML = `
+        ${stackBar(c, N)}
+        <div class="grid grid-cols-4 gap-1 mt-2">
+          ${chip('bg-white border-slate-300', '未習', c[0])}
+          ${chip('bg-yellow-300 border-yellow-400', '予習', c[1])}
+          ${chip('bg-green-400 border-green-500', '授業', c[2])}
+          ${chip('bg-blue-400 border-blue-500', '復習', c[3])}
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          ${stat('作業量ベースの進捗', timePct.toFixed(1) + '%', `${fmt(done)} / ${fmt(total)}`)}
+          ${stat('工程ベースの進捗', stepPct.toFixed(1) + '%', `${N * 3 - steps} / ${N * 3} 工程`)}
+        </div>`;
+
+      // 授業視聴の概算
+      const lec = k.l;
+      const yellowMin = c[1] * lec;
+      const allLecMin = (c[0] + c[1]) * lec;
+      const daily = Math.max(0, +st.daily || 0);
+      let lecHtml = `
+        <div class="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+          <div class="text-xs text-slate-600">予習済み（黄）${c[1]}問 を全て授業済み（緑）にするまで</div>
+          <div class="text-2xl font-bold text-green-700 my-1">${fmt(yellowMin)}</div>
+          <div class="text-[11px] text-slate-500">${c[1]}問 × ${lec}分</div>
+        </div>`;
+      if (c[1] > 0 && daily > 0) {
+        lecHtml += `<p class="text-sm text-slate-600">1日${fmt(daily)}を授業視聴に使うと、約 <b>${Math.ceil(yellowMin / daily)}日</b> で見終わります。</p>`;
+      }
+      lecHtml += `<p class="text-sm text-slate-600">未習（白）も含めて全て授業済みにする場合は <b>${fmt(allLecMin)}</b>（${c[0] + c[1]}問）。</p>`;
+      $('an-lecture-card').innerHTML = lecHtml;
+
+      // 残りの作業量
+      const rows = [
+        ['予習（未習→予習）', c[0], k.p],
+        ['授業（予習→授業）', c[0] + c[1], k.l],
+        ['復習（授業→復習）', c[0] + c[1] + c[2], k.r]
+      ];
+      let rh = `<table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 border-b"><th class="text-left py-1 font-normal">工程</th><th class="text-right font-normal">問数</th><th class="text-right font-normal">1問</th><th class="text-right font-normal">合計</th></tr></thead><tbody>`;
+      rows.forEach(r => {
+        rh += `<tr class="border-b border-slate-100"><td class="py-1.5">${r[0]}</td><td class="text-right">${r[1]}</td><td class="text-right">${r[2]}分</td><td class="text-right font-bold">${fmt(r[1] * r[2])}</td></tr>`;
+      });
+      rh += `<tr><td class="py-1.5 font-bold" colspan="3">残り合計</td><td class="text-right font-bold text-blue-700">${fmt(rem)}</td></tr></tbody></table>
+        <p class="text-xs text-slate-500">残り ${steps} 工程（予習・授業・復習の合計）</p>`;
+      $('an-remaining').innerHTML = rh;
+
+      renderPace(c, total, done, rem, steps, today, daily);
+      renderRecent(today);
+      renderSections(k);
+      renderMilestones(total, done, today);
+    }
+
+    function verdict(g) {
+      if (g >= 0.5) return ['先行', 'bg-sky-100 text-sky-700 border-sky-300'];
+      if (g >= -1) return ['順調', 'bg-emerald-100 text-emerald-700 border-emerald-300'];
+      if (g >= -3) return ['やや遅れ', 'bg-amber-100 text-amber-700 border-amber-300'];
+      return ['遅れ', 'bg-rose-100 text-rose-700 border-rose-300'];
+    }
+
+    function renderPace(c, total, done, rem, steps, today, daily) {
+      const el = $('an-pace');
+      if (rem <= 0) {
+        el.innerHTML = `<div class="text-center py-2 text-lg font-bold text-blue-600">🎉 全問、復習まで完了しています</div>`;
+        return;
+      }
+      const s = parse(st.start), d = parse(st.deadline);
+      let h = '';
+      const ok = s && d && d > s;
+
+      if (!ok) {
+        h += `<p class="text-sm text-slate-600">「分析の設定」で開始日と期限を入れると、計画に対する遅れ・先行が表示されます。</p>`;
+      } else {
+        const totalDays = dayDiff(s, d) + 1;
+        const elapsed = Math.min(Math.max(dayDiff(s, today), 0), totalDays);
+        const remDays = totalDays - elapsed;
+        const ideal = elapsed / totalDays;
+        const actual = total > 0 ? done / total : 0;
+        const gapDays = (actual - ideal) * totalDays;
+        const gapMin = (actual - ideal) * total;
+        const v = verdict(gapDays);
+        const before = dayDiff(today, s) > 0;
+
+        if (before) {
+          h += `<p class="text-sm text-slate-600">開始日（${md(s)}）まであと <b>${dayDiff(today, s)}日</b> です。</p>`;
+        } else if (dayDiff(today, d) < 0) {
+          h += `<div class="text-center"><span class="inline-block px-3 py-1 rounded-full border font-bold bg-rose-100 text-rose-700 border-rose-300">期限超過</span>
+            <p class="text-sm text-slate-600 mt-2">期限（${md(d)}）を ${-dayDiff(today, d)}日 過ぎています。残り ${fmt(rem)}。</p></div>`;
+        } else {
+          h += `<div class="text-center space-y-1">
+            <span class="inline-block px-4 py-1 rounded-full border font-bold text-lg ${v[1]}">${v[0]}</span>
+            <p class="text-sm text-slate-600">理想より <b>${gapDays >= 0 ? fmt(gapMin) + ' 先行' : fmt(-gapMin) + ' 遅れ'}</b>（約${Math.abs(gapDays).toFixed(1)}日分）</p></div>`;
+        }
+
+        // 実績と理想の比較バー
+        h += `<div class="mt-2"><div class="relative h-4 rounded-full bg-slate-200 border border-slate-300 overflow-visible">
+            <div class="absolute left-0 top-0 h-full rounded-full bg-blue-400" style="width:${(actual * 100).toFixed(1)}%"></div>
+            <div class="absolute top-[-4px] h-6 border-l-2 border-rose-500" style="left:${(ideal * 100).toFixed(1)}%"></div></div>
+          <div class="flex justify-between text-[11px] text-slate-500 mt-1"><span>実績 ${(actual * 100).toFixed(1)}%</span><span class="text-rose-500">| 理想 ${(ideal * 100).toFixed(1)}%</span></div></div>`;
+
+        const avg = elapsed >= 1 ? done / elapsed : null;
+        const rp = recentPace(done, today);
+        const reqPerDay = remDays > 0 ? rem / remDays : null;
+        h += `<div class="grid grid-cols-2 gap-2 mt-3">
+          ${stat('経過 / 全期間', `${elapsed} / ${totalDays}日`, `残り${remDays}日（今日を含む）`)}
+          ${stat('理想の1日ノルマ', fmt(total / totalDays), '全期間で均等に進めた場合')}
+          ${reqPerDay !== null ? stat('これから必要なペース', fmt(reqPerDay) + '/日', `週あたり ${fmt(reqPerDay * 7)} ・ 1日 約${(steps / remDays).toFixed(1)}工程`) : ''}
+          ${avg !== null ? stat('開始からの平均', fmt(avg) + '/日', '完了作業量 ÷ 経過日数') : ''}
+          ${rp ? stat('直近の実績', fmt(rp.pace) + '/日', `過去${rp.span}日の記録から`) : ''}
+        </div>`;
+
+        if (reqPerDay !== null && daily > 0) {
+          const diff = reqPerDay - daily;
+          h += `<p class="text-sm mt-2 ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}">` +
+            (diff > 0
+              ? `期限に間に合わせるには、1日あたり あと <b>${fmt(diff)}</b> 多く必要です（設定: ${fmt(daily)}/日）。`
+              : `設定した ${fmt(daily)}/日 で期限に間に合います（必要 ${fmt(reqPerDay)}/日）。`) + `</p>`;
+        }
+
+        // 完了予測
+        const usedPace = rp ? rp.pace : avg;
+        if (!before && usedPace && usedPace > 0 && dayDiff(today, d) >= 0) {
+          const need = Math.ceil(rem / usedPace);
+          const fin = addDays(today, need - 1);
+          const margin = dayDiff(fin, d);
+          h += `<p class="text-sm text-slate-600 mt-1">${rp ? '直近' : '平均'}のペースを続けると、<b>${md(fin)}頃</b>に完了見込み（` +
+            (margin >= 0 ? `期限の ${margin}日前` : `期限を ${-margin}日超過`) + `）。</p>`;
+        }
+      }
+
+      if (daily > 0) {
+        const need = Math.ceil(rem / daily);
+        h += `<p class="text-sm text-slate-600 mt-1">毎日 ${fmt(daily)} 学習した場合、今日から <b>${need}日</b> で完了（${md(addDays(today, need - 1))}頃）。</p>`;
+      }
+      el.innerHTML = h;
+    }
+
+    function renderRecent(today) {
+      const el = $('an-recent');
+      const gains = [];
+      for (let i = 6; i >= 0; i--) {
+        const day = addDays(today, -i);
+        const cur = stateAt(ymd(day)), prev = stateAt(ymd(addDays(day, -1)));
+        gains.push({ day, g: (cur !== null && prev !== null) ? Math.max(0, cur - prev) : null });
+      }
+      const max = Math.max(1, ...gains.map(x => x.g || 0));
+      const sum = gains.reduce((a, x) => a + (x.g || 0), 0);
+      let h = `<div class="flex items-end justify-between h-24 gap-1">`;
+      gains.forEach(x => {
+        const ht = x.g ? Math.max(4, x.g / max * 72) : 2;
+        h += `<div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="text-[10px] text-slate-500 mb-0.5">${x.g === null ? '–' : (x.g ? Math.round(x.g) : '0')}</div>
+          <div class="w-full rounded-t ${x.g ? 'bg-teal-400' : 'bg-slate-200'}" style="height:${ht}px"></div></div>`;
+      });
+      h += `</div><div class="flex justify-between gap-1 mt-1">`;
+      gains.forEach(x => { h += `<div class="flex-1 text-center text-[10px] text-slate-500">${x.day.getDate()}<br>${WD[x.day.getDay()]}</div>`; });
+      h += `</div><p class="text-xs text-slate-500 mt-1">棒の数字は、その日に進んだ作業量（分）です。直近7日の合計は ${fmt(sum)}。「–」は記録のない日です。</p>`;
+      el.innerHTML = h;
+    }
+
+    function renderSections(k) {
+      let h = '';
+      const info = sections.map(sec => {
+        const c = countsOf(sec.ids);
+        const tot = sec.ids.length * k.cum[3];
+        const m = minutesOf(c);
+        return { label: sec.label, c, pct: tot > 0 ? m / tot * 100 : 0, rem: tot - m };
+      });
+      info.forEach(x => {
+        h += `<div>
+          <div class="flex justify-between items-baseline text-sm"><b class="text-slate-700">${x.label}</b><span class="text-xs text-slate-500">${x.pct.toFixed(0)}% ・ 残り ${fmt(x.rem)}</span></div>
+          ${stackBar(x.c, 20)}
+          <div class="text-[11px] text-slate-500 mt-0.5">未${x.c[0]} ／ 予${x.c[1]} ／ 授${x.c[2]} ／ 復${x.c[3]}</div></div>`;
+      });
+      $('an-sections').innerHTML = h;
+
+      const hints = [];
+      const top = (idx) => info.filter(x => x.c[idx] > 0).sort((a, b) => b.c[idx] - a.c[idx])[0];
+      const y = top(1), g = top(2), w = top(0);
+      if (y) hints.push(`🟡 授業待ちが最も多い: <b>${y.label}</b>（${y.c[1]}問 ・ 授業${fmt(y.c[1] * k.l)}）`);
+      if (g) hints.push(`🟢 復習待ちが最も多い: <b>${g.label}</b>（${g.c[2]}問 ・ 復習${fmt(g.c[2] * k.r)}）`);
+      if (w) hints.push(`⚪ 未習が最も多い: <b>${w.label}</b>（${w.c[0]}問）`);
+      $('an-hints').innerHTML = hints.length ? `<div class="border-t pt-2 space-y-1">${hints.map(t => `<p>${t}</p>`).join('')}</div>` : '';
+    }
+
+    function renderMilestones(total, done, today) {
+      const el = $('an-milestones');
+      const s = parse(st.start), d = parse(st.deadline);
+      if (!(s && d && d > s)) {
+        el.innerHTML = `<p class="text-sm text-slate-600">開始日と期限を設定すると、25%・50%・75%・100%の到達目安日が表示されます。</p>`;
+        return;
+      }
+      const totalDays = dayDiff(s, d) + 1;
+      const actual = total > 0 ? done / total : 0;
+      let h = `<table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 border-b"><th class="text-left py-1 font-normal">目安日</th><th class="text-right font-normal">進捗</th><th class="text-right font-normal">累計作業量</th><th class="text-right font-normal">状況</th></tr></thead><tbody>`;
+      [0.25, 0.5, 0.75, 1].forEach(p => {
+        const date = p === 1 ? d : addDays(s, Math.round(totalDays * p));
+        const reached = actual >= p - 1e-9;
+        const late = !reached && dayDiff(date, today) > 0;
+        const status = reached ? '<span class="text-emerald-600 font-bold">達成</span>'
+          : late ? '<span class="text-rose-600 font-bold">未達</span>'
+          : `<span class="text-slate-500">あと${Math.max(0, dayDiff(today, date))}日</span>`;
+        h += `<tr class="border-b border-slate-100"><td class="py-1.5">${md(date)}</td><td class="text-right">${p * 100}%</td><td class="text-right">${fmt(total * p)}</td><td class="text-right">${status}</td></tr>`;
+      });
+      h += `</tbody></table><p class="text-xs text-slate-500">一定のペースで進めた場合の理想の通過点です。</p>`;
+      el.innerHTML = h;
+    }
+
+    // ---- 設定入力 ----
+    const fields = [['an-lecture', 'lecture', 'num'], ['an-prep', 'prep', 'num'], ['an-review', 'review', 'num'],
+                    ['an-daily', 'daily', 'num'], ['an-start', 'start', 'str'], ['an-deadline', 'deadline', 'str']];
+    fields.forEach(([id, key, type]) => {
+      const el = $(id);
+      el.value = st[key];
+      el.addEventListener(type === 'num' ? 'input' : 'change', () => {
+        st[key] = type === 'num' ? (el.value === '' ? 0 : Math.max(0, Number(el.value))) : el.value;
+        try { localStorage.setItem(SKEY, JSON.stringify(st)); } catch (e) {}
+        render();
+      });
+    });
+
+    // ---- 既存機能との連携（既存コードは変更せず、イベントを購読するだけ） ----
+    // タイルのタップ: 既存のクリック処理が状態を更新した後に呼ばれる
+    $('app-container').addEventListener('click', () => { record(); render(); });
+    // 復元(ペースト): 既存の復元処理のあとに再描画
+    $('btn-import').addEventListener('click', () => { setTimeout(() => { record(); render(); }, 0); });
+    // 日付をまたいで開きっぱなしの場合に更新
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { record(); render(); } });
+
+    record();
+    render();
+  })();
   </script>
 </body>
 </html>
