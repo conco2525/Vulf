@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f8fafc">
+  <title>過去問 進捗管理</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      background-color: #f8fafc; color: #334155;
+      font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, system-ui, sans-serif;
+    }
+    button { font-family: inherit; }
+    :focus-visible { outline: 2px solid #4f46e5; outline-offset: 2px; }
+
+    /* ステータス配色（Math.html と同じ4色） */
+    .status-0 { background-color: #ffffff; border-color: #cbd5e1; color: #475569; } /* 未習 */
+    .status-1 { background-color: #fde047; border-color: #facc15; color: #854d0e; } /* 去年解いた */
+    .status-2 { background-color: #4ade80; border-color: #22c55e; color: #14532d; } /* 今年解いた */
+    .status-3 { background-color: #60a5fa; border-color: #3b82f6; color: #1e3a8a; } /* 復習した */
+    .sw { display: inline-block; width: 1rem; height: 1rem; border-width: 1px; border-style: solid; border-radius: .25rem; flex: none; }
+
+    /* タイル */
+    .tile {
+      position: relative; display: flex; align-items: center; justify-content: center;
+      width: 100%; aspect-ratio: 1 / 1; border-width: 2px; border-style: solid; border-radius: .5rem;
+      font-weight: 700; cursor: pointer; user-select: none; transition: transform .15s;
+    }
+    .tile:active { transform: scale(.94); }
+    .tile .yr { font-size: 1.125rem; line-height: 1; }
+    .tile.has-date .yr { transform: translateY(-4px); }
+    .tile .dt { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center; font-size: 8px; line-height: 1; font-weight: 600; letter-spacing: -.02em; opacity: .85; }
+    .tile .sc { position: absolute; top: 1px; right: 2px; font-size: 9px; line-height: 1.15; font-weight: 800; padding: 0 3px; border-radius: 4px; background: rgba(15,23,42,.78); color: #fff; }
+    .tile .memo, .memo-legend { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .6; }
+    .tile .memo { position: absolute; top: 4px; left: 4px; }
+    .memo-legend { display: inline-block; vertical-align: middle; background: #64748b; opacity: 1; }
+
+    /* アコーディオン */
+    summary { list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    details[open] .chev { transform: rotate(180deg); }
+    .chev { transition: transform .2s; }
+
+    /* ポップアップ（スマホでは下から出るシート） */
+    .overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background: rgba(15,23,42,.5); }
+    .overlay[hidden] { display: none; }
+    .panel {
+      width: 100%; max-width: 32rem; background: #fff; border-radius: 1rem 1rem 0 0;
+      display: flex; flex-direction: column; max-height: 92vh; max-height: 92dvh;
+      box-shadow: 0 -8px 30px rgba(15,23,42,.2); animation: rise .18s ease-out;
+    }
+    @media (min-width: 640px) { .overlay { align-items: center; } .panel { border-radius: 1rem; } }
+    @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .panel { animation: none; } .tile, .chev { transition: none; } }
+    .panel-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    .panel-foot { padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px)); }
+
+    /* ステータス選択ボタン */
+    .st-btn { border-width: 2px; border-style: solid; border-radius: .75rem; padding: .7rem .5rem; font-weight: 700; font-size: .875rem; transition: opacity .15s, box-shadow .15s; }
+    .st-btn[aria-pressed="false"] { opacity: .6; }
+    .st-btn[aria-pressed="true"] { box-shadow: 0 0 0 3px #4f46e5; }
+    .st-btn[aria-pressed="true"]::before { content: "✓ "; }
+
+    mark { background: #fef08a; color: inherit; border-radius: 2px; padding: 0 1px; }
+    input, textarea, select { font-size: 16px; } /* iOSの自動ズーム防止 */
+  </style>
+</head>
+<body class="pb-24">
+
+  <div class="max-w-lg mx-auto p-4 space-y-4">
+
+    <!-- ヘッダー -->
+    <header class="text-center pb-2 border-b-2 border-slate-400">
+      <h1 class="text-xl font-bold text-slate-800">過去問 進捗管理</h1>
+      <a href="Math.html">数学管理へ</a>
+      <p id="range" class="text-xs text-slate-500 mt-0.5"></p>
+    </header>
+
+    <!-- 全体ダッシュボード（凡例を兼ねる） -->
+    <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3" aria-labelledby="h-dash">
+      <h2 id="h-dash" class="text-md font-bold border-l-4 border-indigo-500 pl-2">全体の進捗</h2>
+      <div id="dash" class="space-y-3"></div>
+    </section>
+
+    <!-- メモ検索 -->
+    <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3" aria-labelledby="h-search">
+      <h2 id="h-search" class="text-md font-bold border-l-4 border-slate-500 pl-2">メモ検索</h2>
+      <div class="flex gap-2">
+        <div class="relative flex-1 min-w-0">
+          <input id="q" type="text" enterkeyhint="search" autocomplete="off" placeholder="例: 確率 ケアレス"
+                 aria-label="メモのキーワード"
+                 class="w-full border border-slate-300 rounded-lg pl-3 pr-9 py-2 bg-white">
+          <button id="q-clear" type="button" hidden aria-label="キーワードを消す"
+                  class="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-400">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <select id="q-sub" aria-label="科目で絞り込み" class="border border-slate-300 rounded-lg px-2 py-2 bg-white w-28"></select>
+      </div>
+      <p id="q-hint" class="text-xs text-slate-500"></p>
+      <div id="q-res" hidden class="space-y-2 max-h-80 overflow-y-auto"></div>
+    </section>
+
+    <!-- 科目別アコーディオン -->
+    <main id="subjects" class="space-y-3"></main>
+
+    <!-- 設定・バックアップ -->
+    <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4" aria-labelledby="h-set">
+      <h2 id="h-set" class="text-md font-bold border-l-4 border-slate-500 pl-2">設定・バックアップ</h2>
+      <label class="flex items-start gap-2 text-sm">
+        <input id="opt-2000" type="checkbox" class="mt-1 w-4 h-4 accent-indigo-600">
+        <span>2000年度を含める<br><span class="text-xs text-slate-500">オフにすると2001〜2025年の25年分（計175年分）。2000年度の記録は消えず、非表示になるだけです。</span></span>
+      </label>
+      <div class="flex space-x-2">
+        <button id="btn-export" type="button" class="flex-1 bg-green-50 text-green-700 border border-green-200 py-2 rounded text-sm font-bold shadow-sm">バックアップ(コピー)</button>
+        <button id="btn-import" type="button" class="flex-1 bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded text-sm font-bold shadow-sm">復元(ペースト)</button>
+      </div>
+      <p class="text-xs text-slate-500">データはこの端末のブラウザ内にだけ保存されます。機種変更やブラウザのデータ削除に備えて、ときどきバックアップをコピーしてメモアプリなどに保管してください。</p>
+    </section>
+  </div>
+
+  <!-- 年度ごとの編集ポップアップ -->
+  <div id="sheet" class="overlay" hidden>
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sh-title" tabindex="-1" id="sh-panel">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div class="border-l-4 border-indigo-500 pl-2">
+          <div id="sh-sub" class="text-xs text-slate-500"></div>
+          <h2 id="sh-title" class="text-lg font-bold text-slate-800 leading-tight"></h2>
+        </div>
+        <button id="sh-close" type="button" aria-label="閉じる" class="w-10 h-10 flex items-center justify-center text-slate-500">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="panel-body px-4 py-4 space-y-5 text-sm">
+        <div>
+          <div class="font-bold text-slate-700 mb-2">ステータス</div>
+          <div id="sh-status" class="grid grid-cols-2 gap-2"></div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="sh-date" class="font-bold text-slate-700">解いた日付</label>
+            <button id="sh-today" type="button" class="text-xs font-bold text-indigo-600 px-2 py-1">今日にする</button>
+          </div>
+          <input id="sh-date" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">
+          <p class="text-xs text-slate-500 mt-1">ステータスを変えると今日の日付が入ります。過去に解いた日は直接書き換えられます。</p>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="sh-memo" class="font-bold text-slate-700">メモ</label>
+            <span id="sh-count" class="text-xs text-slate-500">0 / 100</span>
+          </div>
+          <textarea id="sh-memo" rows="3" maxlength="100" placeholder="気づき、間違えた原因など"
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white resize-none"></textarea>
+        </div>
+
+        <div id="sh-scores-wrap" hidden>
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-bold text-slate-700">大問ごとの得点</span>
+            <span class="text-xs text-slate-500">合計 <b id="sh-total" class="text-base text-slate-800">0</b> 点</span>
+          </div>
+          <div id="sh-scores" class="grid grid-cols-3 gap-2"></div>
+        </div>
+      </div>
+
+      <div class="panel-foot flex items-center gap-2 px-3 pt-3 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+        <button id="sh-reset" type="button" class="px-2 py-2 text-sm font-bold text-rose-600">記録を消す</button>
+        <button id="sh-cancel" type="button" class="flex-1 py-2.5 bg-white border border-slate-300 text-slate-600 rounded-lg text-sm font-bold">キャンセル</button>
+        <button id="sh-save" type="button" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-sm">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- バックアップ／復元ダイアログ -->
+  <div id="txt" class="overlay" hidden>
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="txt-title" tabindex="-1">
+      <div class="px-4 py-3 border-b border-slate-200">
+        <h2 id="txt-title" class="text-md font-bold border-l-4 border-orange-500 pl-2"></h2>
+      </div>
+      <div class="panel-body px-4 py-4 space-y-3 text-sm">
+        <p id="txt-help" class="text-slate-600"></p>
+        <textarea id="txt-area" rows="8" spellcheck="false" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono" style="font-size:13px"></textarea>
+        <button id="txt-paste" type="button" class="text-xs font-bold text-indigo-600 px-1 py-1">クリップボードから貼り付け</button>
+      </div>
+      <div class="panel-foot flex gap-2 px-3 pt-3 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+        <button id="txt-cancel" type="button" class="flex-1 py-2.5 bg-white border border-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+        <button id="txt-ok" type="button" class="flex-1 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-bold shadow-sm">復元する</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite" hidden
+       class="fixed left-1/2 -translate-x-1/2 z-[60] bg-slate-800 text-white text-sm rounded-full px-4 py-2 shadow-lg max-w-[90vw] text-center"
+       style="bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px))"></div>
+
+<script>
+(function () {
+  // ===== 定義 =====
+  const SUBJECTS = [
+    { id: 'eng',  name: '英語',   q: 0 },
+    { id: 'math', name: '数学',   q: 6 },   // 大問6
+    { id: 'phys', name: '物理',   q: 3 },   // 大問3
+    { id: 'chem', name: '化学',   q: 3 },   // 大問3
+    { id: 'jpn',  name: '現代文', q: 0 },
+    { id: 'cla',  name: '古文',   q: 0 },
+    { id: 'chn',  name: '漢文',   q: 0 }
+  ];
+  const STATUS = ['未習', '去年解いた', '今年解いた', '復習した'];
+  const LAST_YEAR = 2025;
+  const DATA_KEY = 'kakomon_tracker_records_v1';
+  const PREF_KEY = 'kakomon_tracker_prefs_v1';
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  const pad = n => String(n).padStart(2, '0');
+  const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const shortDate = d => `'${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}`;
+  const norm = s => String(s).normalize('NFKC').toLowerCase();
+  const subOf = id => SUBJECTS.find(s => s.id === id);
+
+  // ===== 状態・保存 =====
+  let records = {};                       // { "math_2005": {status, date, memo, scores[]} }
+  let prefs = { include2000: true, open: [] };
+  let storageOK = true;
+
+  function readJSON(k, d) {
+    try { const v = JSON.parse(localStorage.getItem(k)); return v && typeof v === 'object' ? v : d; } catch (e) { return d; }
+  }
+  function writeJSON(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch (e) {
+      if (storageOK) { storageOK = false; toast('この環境では保存できません。こまめにバックアップをコピーしてください'); }
+      return false;
+    }
+  }
+  const saveRecords = () => writeJSON(DATA_KEY, records);
+  const savePrefs = () => writeJSON(PREF_KEY, prefs);
+
+  // 1件分を検証・整形（空なら null）。インポート時の不正データ対策も兼ねる
+  function cleanRecord(v, sub) {
+    if (!v || typeof v !== 'object') return null;
+    const status = [0, 1, 2, 3].includes(Number(v.status)) ? Number(v.status) : 0;
+    const date = typeof v.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? v.date : '';
+    const memo = typeof v.memo === 'string' ? v.memo.slice(0, 100) : '';
+    let scores = [];
+    if (sub.q) {
+      for (let i = 0; i < sub.q; i++) {
+        const x = Array.isArray(v.scores) ? v.scores[i] : '';
+        const n = (x === '' || x === null || x === undefined) ? NaN : Number(x);
+        scores.push(Number.isFinite(n) && n >= 0 ? n : '');
+      }
+      if (scores.every(s => s === '')) scores = [];
+    }
+    if (!status && !date && !memo && !scores.length) return null;
+    return { status, date, memo, scores };
+  }
+  function cleanRecords(src) {
+    const out = {};
+    Object.keys(src || {}).forEach(k => {
+      const m = /^([a-z]+)_(\d{4})$/.exec(k);
+      const sub = m && subOf(m[1]);
+      const y = m && Number(m[2]);
+      if (!sub || y < 2000 || y > LAST_YEAR) return;
+      const r = cleanRecord(src[k], sub);
+      if (r) out[k] = r;
+    });
+    return out;
+  }
+
+  const yearsList = () => { const a = []; for (let y = prefs.include2000 ? 2000 : 2001; y <= LAST_YEAR; y++) a.push(y); return a; };
+  const keyOf = (sub, y) => `${typeof sub === 'string' ? sub : sub.id}_${y}`;
+
+  function scoreTotal(r, sub) {
+    if (!sub.q || !r || !r.scores || !r.scores.some(v => v !== '')) return null;
+    return Math.round(r.scores.reduce((a, v) => a + (Number(v) || 0), 0) * 10) / 10;
+  }
+
+  // ===== 描画: 部品 =====
+  function stackBar(c, n, h) {
+    const w = i => (n ? c[i] / n * 100 : 0).toFixed(2);
+    return `<div class="flex w-full ${h} rounded-full overflow-hidden bg-slate-200 border border-slate-300" aria-hidden="true">
+      <div class="bg-blue-400" style="width:${w(3)}%"></div>
+      <div class="bg-green-400" style="width:${w(2)}%"></div>
+      <div class="bg-yellow-300" style="width:${w(1)}%"></div></div>`;
+  }
+  function statBox(label, value, sub) {
+    return `<div class="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+      <div class="text-[11px] text-slate-500">${label}</div>
+      <div class="text-lg font-bold text-slate-800">${value}</div>
+      <div class="text-[11px] text-slate-500">${sub}</div></div>`;
+  }
+  function tileHTML(sub, y) {
+    const r = records[keyOf(sub, y)];
+    const st = r ? r.status : 0;
+    const date = r && r.date ? shortDate(r.date) : '';
+    const total = scoreTotal(r, sub);
+    const label = `${sub.name} ${y}年度 ${STATUS[st]}` + (r && r.date ? ` ${r.date}` : '') + (total !== null ? ` 合計${total}点` : '') + (r && r.memo ? ' メモあり' : '');
+    return `<button type="button" class="tile status-${st}${date ? ' has-date' : ''}" data-sub="${sub.id}" data-year="${y}" aria-label="${esc(label)}">
+      <span class="yr">${pad(y % 100)}</span>${date ? `<span class="dt">${date}</span>` : ''}${total !== null ? `<span class="sc">${total}</span>` : ''}${r && r.memo ? '<span class="memo"></span>' : ''}</button>`;
+  }
+  function updateTile(subId, y) {
+    const el = $('subjects').querySelector(`.tile[data-sub="${subId}"][data-year="${y}"]`);
+    if (el) el.outerHTML = tileHTML(subOf(subId), y);
+  }
+  function countsFor(subId) {
+    const c = [0, 0, 0, 0];
+    yearsList().forEach(y => { const r = records[keyOf(subId, y)]; c[r ? r.status : 0]++; });
+    return c;
+  }
+  function scoreLine(sub) {
+    if (!sub.q) return '';
+    const t = yearsList().map(y => scoreTotal(records[keyOf(sub, y)], sub)).filter(v => v !== null);
+    if (!t.length) return '';
+    const avg = Math.round(t.reduce((a, b) => a + b, 0) / t.length * 10) / 10;
+    return `得点を記録した年度 ${t.length}年分 ／ 合計点の平均 ${avg}点 ／ 最高 ${Math.max(...t)}点`;
+  }
+
+  // ===== 描画: 全体 =====
+  function renderRange() {
+    const ys = yearsList();
+    $('range').textContent = `${SUBJECTS.length}科目 × ${ys[0]}〜${LAST_YEAR}年度（計${ys.length * SUBJECTS.length}年分）`;
+  }
+
+  function renderSubjects() {
+    const ys = yearsList();
+    $('subjects').innerHTML = SUBJECTS.map(sub => `
+      <details class="bg-white rounded-xl shadow-sm border border-slate-200" data-sub="${sub.id}"${prefs.open.includes(sub.id) ? ' open' : ''}>
+        <summary class="flex items-center gap-3 p-3 cursor-pointer select-none">
+          <div class="flex-1 min-w-0 space-y-1.5">
+            <div class="flex items-baseline justify-between gap-2">
+              <h2 class="font-bold text-slate-800 border-l-4 border-indigo-500 pl-2">${sub.name}</h2>
+              <span id="cnt-${sub.id}" class="text-xs text-slate-500 whitespace-nowrap"></span>
+            </div>
+            <div id="bar-${sub.id}"></div>
+          </div>
+          <svg class="chev text-slate-400 flex-none" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </summary>
+        <div class="px-3 pb-3 pt-3 border-t border-slate-100 space-y-3">
+          <p id="sc-${sub.id}" class="text-xs text-slate-500" hidden></p>
+          <div class="grid grid-cols-5 gap-2">${ys.map(y => tileHTML(sub, y)).join('')}</div>
+        </div>
+      </details>`).join('');
+    updateStats();
+  }
+
+  function updateStats() {
+    const per = yearsList().length, total = per * SUBJECTS.length, all = [0, 0, 0, 0];
+    SUBJECTS.forEach(sub => {
+      const c = countsFor(sub.id);
+      c.forEach((v, i) => all[i] += v);
+      $('cnt-' + sub.id).innerHTML = `<b class="text-sm text-slate-800">${per - c[0]}</b> / ${per}　復習 <b class="text-sm text-blue-600">${c[3]}</b>`;
+      $('bar-' + sub.id).innerHTML = stackBar(c, per, 'h-2.5');
+      const line = scoreLine(sub), el = $('sc-' + sub.id);
+      el.textContent = line; el.hidden = !line;
+    });
+    const touched = total - all[0], pct = v => total ? Math.round(v / total * 100) : 0;
+    $('dash').innerHTML = `
+      <div class="grid grid-cols-2 gap-2">
+        ${statBox('着手した年度', `${touched} / ${total}`, `${pct(touched)}%`)}
+        ${statBox('復習まで完了', `${all[3]} / ${total}`, `${pct(all[3])}%`)}
+      </div>
+      ${stackBar(all, total, 'h-4')}
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        ${STATUS.map((s, i) => `<div class="flex items-center text-xs"><span class="sw status-${i} mr-1.5"></span>${s}<b class="ml-auto text-sm text-slate-800">${all[i]}</b></div>`).join('')}
+      </div>
+      <p class="text-[11px] text-slate-500 leading-relaxed">タイルをタップして記録します。<span class="memo-legend"></span> はメモあり、右上の数字は合計点（数学・物理・化学）、下の小さな日付は解いた日です。</p>`;
+  }
+
+  // ===== メモ検索 =====
+  // NFKC正規化（全角/半角・大文字小文字をそろえる）した上で一致位置を元の文字列に対応づける
+  function highlight(text, terms) {
+    let n = '', map = [];
+    for (let i = 0; i < text.length;) {
+      const ch = String.fromCodePoint(text.codePointAt(i));
+      const nc = ch.normalize('NFKC').toLowerCase();
+      for (let j = 0; j < nc.length; j++) map.push(i);
+      n += nc; i += ch.length;
+    }
+    const marked = new Set();
+    terms.forEach(t => {
+      let idx = n.indexOf(t);
+      while (idx >= 0) { for (let k = idx; k < idx + t.length; k++) marked.add(map[k]); idx = n.indexOf(t, idx + t.length); }
+    });
+    let out = '', open = false;
+    for (let i = 0; i < text.length;) {
+      const ch = String.fromCodePoint(text.codePointAt(i));
+      const m = marked.has(i);
+      if (m && !open) { out += '<mark>'; open = true; }
+      if (!m && open) { out += '</mark>'; open = false; }
+      out += esc(ch); i += ch.length;
+    }
+    return out + (open ? '</mark>' : '');
+  }
+
+  function refreshSearch() {
+    const raw = $('q').value, subSel = $('q-sub').value;
+    const terms = norm(raw).split(/\s+/).filter(Boolean);
+    const box = $('q-res'), hint = $('q-hint');
+    $('q-clear').hidden = !raw;
+    const ys = yearsList();
+    if (!terms.length) {
+      const n = SUBJECTS.reduce((a, s) => a + ys.filter(y => (records[keyOf(s, y)] || {}).memo).length, 0);
+      hint.hidden = false;
+      hint.textContent = `メモのある年度：${n}件。スペースで区切ると、すべてを含むメモに絞り込めます。`;
+      box.hidden = true; box.innerHTML = '';
+      return;
+    }
+    const hits = [];
+    SUBJECTS.forEach(sub => {
+      if (subSel && sub.id !== subSel) return;
+      ys.slice().reverse().forEach(y => {
+        const r = records[keyOf(sub, y)];
+        if (r && r.memo) { const n = norm(r.memo); if (terms.every(t => n.includes(t))) hits.push({ sub, y, r }); }
+      });
+    });
+    hint.hidden = false;
+    hint.textContent = hits.length ? `${hits.length}件見つかりました。タップで開きます。` : '一致するメモはありません。別のキーワードや、科目を「全科目」にして試してください。';
+    box.hidden = !hits.length;
+    box.innerHTML = hits.map(({ sub, y, r }) => `
+      <button type="button" class="res w-full text-left bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1" data-sub="${sub.id}" data-year="${y}">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="sw status-${r.status}"></span>
+          <b class="text-slate-800">${sub.name} ${y}年度</b>
+          <span class="text-slate-500">${STATUS[r.status]}</span>
+          ${r.date ? `<span class="ml-auto text-slate-400">${shortDate(r.date)}</span>` : ''}
+        </div>
+        <p class="text-sm text-slate-700 line-clamp-3">${highlight(r.memo, terms)}</p>
+      </button>`).join('');
+  }
+
+  // ===== 編集ポップアップ =====
+  let cur = null;
+  const scoreInputs = () => [...$('sh-scores').querySelectorAll('input')];
+
+  function readForm() {
+    return { status: cur.status, date: $('sh-date').value, memo: $('sh-memo').value, scores: scoreInputs().map(i => i.value) };
+  }
+  function setStatus(n) {
+    cur.status = n;
+    $('sh-status').querySelectorAll('.st-btn').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.st) === n)));
+  }
+  function updateCount() {
+    const n = $('sh-memo').value.length;
+    $('sh-count').textContent = `${n} / 100`;
+    $('sh-count').className = 'text-xs ' + (n >= 90 ? 'text-rose-600 font-bold' : 'text-slate-500');
+  }
+  function updateTotal() {
+    const sum = scoreInputs().reduce((a, i) => a + (Number(i.value) || 0), 0);
+    $('sh-total').textContent = Math.round(sum * 10) / 10;
+  }
+
+  function openSheet(subId, year, opener) {
+    const sub = subOf(subId), r = records[keyOf(sub, year)] || null;
+    cur = { sub, year, orig: r, status: r ? r.status : 0, dateTouched: false, opener: opener || document.activeElement };
+    $('sh-sub').textContent = sub.name;
+    $('sh-title').textContent = `${year}年度`;
+    $('sh-status').innerHTML = STATUS.map((s, i) => `<button type="button" class="st-btn status-${i}" data-st="${i}" aria-pressed="false">${s}</button>`).join('');
+    $('sh-date').value = r ? r.date : '';
+    $('sh-memo').value = r ? r.memo : '';
+    $('sh-scores-wrap').hidden = !sub.q;
+    $('sh-scores').innerHTML = '';
+    for (let i = 0; i < sub.q; i++) {
+      const v = r && r.scores && r.scores[i] !== undefined ? r.scores[i] : '';
+      $('sh-scores').insertAdjacentHTML('beforeend',
+        `<label class="block bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+          <span class="block text-[11px] text-slate-500 mb-1">大問${i + 1}</span>
+          <input type="number" inputmode="decimal" min="0" step="any" value="${v}" placeholder="0"
+                 class="w-full text-center font-bold border border-slate-300 rounded py-1 bg-white">
+        </label>`);
+    }
+    setStatus(cur.status);
+    updateCount(); updateTotal();
+    $('sh-reset').hidden = !r;
+    cur.snapshot = JSON.stringify(readForm());
+    $('sheet').hidden = false;
+    document.body.style.overflow = 'hidden';
+    $('sh-panel').focus();
+  }
+
+  function closeSheet() {
+    $('sheet').hidden = true;
+    document.body.style.overflow = '';
+    const o = cur && cur.opener; const sub = cur && cur.sub.id, y = cur && cur.year;
+    cur = null;
+    // タイルは再描画されているので、同じ年度のタイルにフォーカスを戻す
+    const t = sub && $('subjects').querySelector(`.tile[data-sub="${sub}"][data-year="${y}"]`);
+    const target = (o && document.contains(o) && !o.classList.contains('tile')) ? o : t;
+    if (target) target.focus({ preventScroll: true });
+  }
+  function requestClose() {
+    if (!cur) return;
+    if (JSON.stringify(readForm()) !== cur.snapshot && !confirm('変更が保存されていません。破棄しますか？')) return;
+    closeSheet();
+  }
+
+  function saveSheet() {
+    const f = readForm(); f.memo = f.memo.trim();
+    const rec = cleanRecord(f, cur.sub), key = keyOf(cur.sub, cur.year);
+    if (rec) records[key] = rec; else delete records[key];
+    saveRecords();
+    updateTile(cur.sub.id, cur.year);
+    updateStats();
+    refreshSearch();
+    closeSheet();
+    toast('保存しました');
+  }
+
+  function resetSheet() {
+    if (!confirm(`${cur.sub.name} ${cur.year}年度の記録（ステータス・日付・メモ・得点）をすべて消します。よろしいですか？`)) return;
+    delete records[keyOf(cur.sub, cur.year)];
+    saveRecords();
+    updateTile(cur.sub.id, cur.year);
+    updateStats();
+    refreshSearch();
+    closeSheet();
+    toast('記録を消しました');
+  }
+
+  // ===== バックアップ／復元 =====
+  let txtMode = '';
+  function openTxt(mode, text) {
+    txtMode = mode;
+    const imp = mode === 'import';
+    $('txt-title').textContent = imp ? 'バックアップから復元' : 'バックアップをコピー';
+    $('txt-help').textContent = imp
+      ? 'コピーしておいたバックアップのテキストを貼り付けてください。現在のデータは上書きされます。'
+      : '自動でコピーできませんでした。下のテキストを全選択してコピーし、メモアプリなどに保管してください。';
+    $('txt-area').value = text || '';
+    $('txt-area').readOnly = !imp;
+    $('txt-ok').hidden = !imp;
+    $('txt-paste').hidden = !imp;
+    $('txt').hidden = false;
+    document.body.style.overflow = 'hidden';
+    $('txt-area').focus();
+    if (!imp) $('txt-area').select();
+  }
+  function closeTxt() { $('txt').hidden = true; document.body.style.overflow = ''; }
+
+  function buildBackup() {
+    return JSON.stringify({ app: 'kakomon-tracker', version: 1, exportedAt: new Date().toISOString(), prefs: { include2000: prefs.include2000 }, records });
+  }
+  function doExport() {
+    const text = buildBackup();
+    const fail = () => openTxt('export', text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => toast('バックアップをコピーしました。メモアプリなどに貼り付けて保管してください'), fail);
+    } else fail();
+  }
+  function doImport() {
+    let parsed;
+    try { parsed = JSON.parse($('txt-area').value.trim()); } catch (e) { toast('読み込めません。コピーしたテキスト全体を貼り付けてください'); return; }
+    if (!parsed || typeof parsed !== 'object') { toast('バックアップの形式が正しくありません'); return; }
+    const src = parsed.records && typeof parsed.records === 'object' ? parsed.records : parsed; // 記録だけのJSONも受け付ける
+    const next = cleanRecords(src);
+    const n = Object.keys(next).length;
+    if (!n && Object.keys(src).length) { toast('読み込める記録が見つかりませんでした'); return; }
+    if (!confirm(`${n}件の記録で、現在のデータを上書きします。よろしいですか？`)) return;
+    records = next;
+    if (parsed.prefs && typeof parsed.prefs.include2000 === 'boolean') prefs.include2000 = parsed.prefs.include2000;
+    saveRecords(); savePrefs();
+    $('opt-2000').checked = prefs.include2000;
+    closeTxt();
+    renderRange(); renderSubjects(); refreshSearch();
+    toast(`${n}件の記録を復元しました`);
+  }
+
+  // ===== トースト =====
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+
+  // ===== イベント =====
+  function bind() {
+    // タイル → ポップアップ
+    $('subjects').addEventListener('click', e => {
+      const t = e.target.closest('.tile');
+      if (t) openSheet(t.dataset.sub, Number(t.dataset.year), t);
+    });
+    // アコーディオンの開閉状態を記憶
+    $('subjects').addEventListener('toggle', e => {
+      const id = e.target.dataset && e.target.dataset.sub;
+      if (!id) return;
+      const has = prefs.open.includes(id);
+      if (e.target.open && !has) prefs.open.push(id);
+      if (!e.target.open && has) prefs.open = prefs.open.filter(x => x !== id);
+      savePrefs();
+    }, true);
+
+    // 検索
+    $('q-sub').innerHTML = '<option value="">全科目</option>' + SUBJECTS.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    $('q').addEventListener('input', refreshSearch);
+    $('q-sub').addEventListener('change', refreshSearch);
+    $('q-clear').addEventListener('click', () => { $('q').value = ''; refreshSearch(); $('q').focus(); });
+    $('q-res').addEventListener('click', e => {
+      const b = e.target.closest('.res');
+      if (b) openSheet(b.dataset.sub, Number(b.dataset.year), b);
+    });
+
+    // ポップアップ内
+    $('sh-status').addEventListener('click', e => {
+      const b = e.target.closest('.st-btn');
+      if (!b) return;
+      const n = Number(b.dataset.st);
+      setStatus(n);
+      if (!cur.dateTouched) { // 日付を自分で触っていなければ、操作した日を自動入力
+        const o = cur.orig, same = n === (o ? o.status : 0);
+        $('sh-date').value = same ? (o ? o.date : '') : (n > 0 ? todayStr() : '');
+      }
+    });
+    $('sh-date').addEventListener('input', () => { cur.dateTouched = true; });
+    $('sh-today').addEventListener('click', () => { $('sh-date').value = todayStr(); cur.dateTouched = true; });
+    $('sh-memo').addEventListener('input', updateCount);
+    $('sh-scores').addEventListener('input', updateTotal);
+    $('sh-save').addEventListener('click', saveSheet);
+    $('sh-reset').addEventListener('click', resetSheet);
+    $('sh-cancel').addEventListener('click', requestClose);
+    $('sh-close').addEventListener('click', requestClose);
+    $('sheet').addEventListener('mousedown', e => { if (e.target === $('sheet')) requestClose(); });
+
+    // 設定・バックアップ
+    $('opt-2000').checked = prefs.include2000;
+    $('opt-2000').addEventListener('change', e => {
+      prefs.include2000 = e.target.checked; savePrefs();
+      renderRange(); renderSubjects(); refreshSearch();
+    });
+    $('btn-export').addEventListener('click', doExport);
+    $('btn-import').addEventListener('click', () => openTxt('import', ''));
+    $('txt-ok').addEventListener('click', doImport);
+    $('txt-cancel').addEventListener('click', closeTxt);
+    $('txt').addEventListener('mousedown', e => { if (e.target === $('txt')) closeTxt(); });
+    $('txt-paste').addEventListener('click', () => {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(t => { $('txt-area').value = t; }, () => toast('貼り付けできませんでした。入力欄を長押しして貼り付けてください'));
+      } else toast('入力欄を長押しして貼り付けてください');
+    });
+
+    // キーボード: Esc で閉じる / Tab をポップアップ内に閉じ込める
+    document.addEventListener('keydown', e => {
+      const ov = !$('txt').hidden ? $('txt') : (!$('sheet').hidden ? $('sheet') : null);
+      if (!ov) return;
+      if (e.key === 'Escape') { ov === $('txt') ? closeTxt() : requestClose(); return; }
+      if (e.key !== 'Tab') return;
+      const f = [...ov.querySelectorAll('button,input,textarea,select')].filter(el => !el.disabled && !el.hidden && el.offsetParent !== null);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === ov.querySelector('.panel'))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+  }
+
+  // ===== 起動 =====
+  const p = readJSON(PREF_KEY, {});
+  if (typeof p.include2000 === 'boolean') prefs.include2000 = p.include2000;
+  if (Array.isArray(p.open)) prefs.open = p.open.filter(id => subOf(id));
+  records = cleanRecords(readJSON(DATA_KEY, {}));
+  renderRange();
+  renderSubjects();
+  bind();
+  refreshSearch();
+})();
+</script>
+</body>
+</html>

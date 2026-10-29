@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>過去問 進捗管理</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* スマホでのタップハイライト無効化 */
+    * { -webkit-tap-highlight-color: transparent; }
+    body { background-color: #f8fafc; color: #334155; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    
+    /* ステータスに応じたタイルの配色 */
+    .status-0 { background-color: #ffffff; border-color: #cbd5e1; color: #64748b; } /* 未習: 白 */
+    .status-1 { background-color: #fef08a; border-color: #eab308; color: #854d0e; } /* 去年解いた: 黄 */
+    .status-2 { background-color: #bbf7d0; border-color: #22c55e; color: #14532d; } /* 今年解いた: 緑 */
+    .status-3 { background-color: #bfdbfe; border-color: #3b82f6; color: #1e3a8a; } /* 復習した: 青 */
+
+    /* アニメーション */
+    .modal-backdrop {
+      background-color: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+    }
+  </style>
+</head>
+<body class="pb-24 pt-4 px-3 sm:px-6 max-w-2xl mx-auto">
+
+  <!-- ヘッダー & 全体サマリー -->
+  <header class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 mb-4">
+    <div class="flex justify-between items-center mb-2">
+      <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+        <i class="fa-solid me-1 fa-graduation-cap text-indigo-600"></i>過去問 進捗管理
+      </h1>
+      <span id="overall-percent" class="text-xs font-bold bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full border border-indigo-200">
+        0% (0/175)
+      </span>
+    </div>
+    
+    <!-- 全体プログレスバー -->
+    <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden flex border border-slate-200 mb-3">
+      <div id="bar-status-3" class="bg-blue-500 h-full transition-all duration-300" style="width: 0%" title="復習した"></div>
+      <div id="bar-status-2" class="bg-green-500 h-full transition-all duration-300" style="width: 0%" title="今年解いた"></div>
+      <div id="bar-status-1" class="bg-yellow-400 h-full transition-all duration-300" style="width: 0%" title="去年解いた"></div>
+    </div>
+
+    <!-- 凡例 (Legend) -->
+    <div class="grid grid-cols-4 gap-1 text-[11px] text-center font-bold text-slate-600">
+      <div class="bg-slate-50 border border-slate-200 py-1 rounded flex items-center justify-center gap-1">
+        <span class="w-2.5 h-2.5 rounded-full bg-white border border-slate-400 inline-block"></span>未習
+      </div>
+      <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 py-1 rounded flex items-center justify-center gap-1">
+        <span class="w-2.5 h-2.5 rounded-full bg-yellow-300 border border-yellow-500 inline-block"></span>去年解いた
+      </div>
+      <div class="bg-green-50 border border-green-200 text-green-800 py-1 rounded flex items-center justify-center gap-1">
+        <span class="w-2.5 h-2.5 rounded-full bg-green-400 border border-green-600 inline-block"></span>今年解いた
+      </div>
+      <div class="bg-blue-50 border border-blue-200 text-blue-800 py-1 rounded flex items-center justify-center gap-1">
+        <span class="w-2.5 h-2.5 rounded-full bg-blue-400 border border-blue-600 inline-block"></span>復習した
+      </div>
+    </div>
+  </header>
+
+  <!-- メモキーワード検索バー -->
+  <section class="bg-white rounded-2xl p-3 shadow-sm border border-slate-200 mb-4">
+    <div class="relative">
+      <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+      <input type="text" id="search-input" placeholder="メモの内容で検索 (例: 確率, ケアレスミス)..." 
+        class="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+      <button id="search-clear" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+        <i class="fa-solid fa-circle-xmark"></i>
+      </button>
+    </div>
+    <!-- 検索結果エリア -->
+    <div id="search-results" class="hidden mt-3 pt-3 border-t border-slate-100 space-y-2 max-h-60 overflow-y-auto"></div>
+  </section>
+
+  <!-- 科目アコーディオンコンテナ -->
+  <main id="subject-container" class="space-y-3 mb-8"></main>
+
+  <!-- 設定・バックアップ -->
+  <section class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+    <h2 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+      <i class="fa-solid fa-database text-slate-500"></i>データバックアップ / 復元
+    </h2>
+    <div class="flex gap-2">
+      <button id="btn-export" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+        <i class="fa-solid fa-copy"></i>バックアップ(コピー)
+      </button>
+      <button id="btn-import" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+        <i class="fa-solid fa-file-import"></i>復元(ペースト)
+      </button>
+    </div>
+  </section>
+
+  <!-- モーダル (ポップアップ) -->
+  <div id="modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+      
+      <!-- モーダルヘッダー -->
+      <div class="p-4 bg-slate-800 text-white flex justify-between items-center">
+        <div>
+          <span id="modal-subject-tag" class="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500 text-white mr-2">科目</span>
+          <h2 id="modal-title" class="text-lg font-bold inline">2025年</h2>
+        </div>
+        <button id="modal-close-icon" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+
+      <!-- モーダルコンテンツ (スクロール可) -->
+      <div class="p-4 space-y-4 overflow-y-auto flex-1 text-sm">
+        
+        <!-- ステータス選択 -->
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-2">学習ステータス</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" data-status="0" class="status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <span class="w-3 h-3 rounded-full bg-white border border-slate-400"></span>未習
+            </button>
+            <button type="button" data-status="1" class="status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <span class="w-3 h-3 rounded-full bg-yellow-400"></span>去年解いた
+            </button>
+            <button type="button" data-status="2" class="status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <span class="w-3 h-3 rounded-full bg-green-500"></span>今年解いた
+            </button>
+            <button type="button" data-status="3" class="status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <span class="w-3 h-3 rounded-full bg-blue-500"></span>復習した
+            </button>
+          </div>
+        </div>
+
+        <!-- 解いた日付 -->
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs font-bold text-slate-500">解いた日付</label>
+            <button type="button" id="btn-today" class="text-[11px] text-indigo-600 font-bold hover:underline">今日を入力をセット</button>
+          </div>
+          <input type="date" id="modal-date" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <!-- メモ (100文字) -->
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs font-bold text-slate-500">メモ (気づき・改善点)</label>
+            <span id="memo-count" class="text-[11px] text-slate-400 font-medium">0 / 100</span>
+          </div>
+          <textarea id="modal-memo" maxlength="100" rows="3" placeholder="間違えた問題の理由や復習ポイントなどを記入..." 
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+        </div>
+
+        <!-- 点数入力欄 (特定科目のみ表示) -->
+        <div id="section-scores" class="hidden border-t border-slate-100 pt-3">
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-xs font-bold text-slate-500">大問別得点</label>
+            <span class="text-xs font-bold text-indigo-600">合計: <span id="modal-total-score" class="text-base font-extrabold">0</span> 点</span>
+          </div>
+          <div id="scores-grid" class="grid grid-cols-3 gap-2">
+            <!-- JavaScriptで動的生成 -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- モーダル フッター -->
+      <div class="p-3 bg-slate-50 border-t border-slate-200 flex gap-2">
+        <button id="modal-cancel" class="flex-1 py-2.5 bg-white border border-slate-300 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
+          キャンセル
+        </button>
+        <button id="modal-save" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 shadow-md transition">
+          保存する
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- 定数定義 ---
+    const STORAGE_KEY = 'kakomon_progress_v1';
+    
+    // 科目リストおよび各科目の大問数設定
+    const SUBJECTS = [
+      { id: 'eng', name: '英語', questions: 0, icon: 'fa-language' },
+      { id: 'math', name: '数学', questions: 6, icon: 'fa-calculator' },
+      { id: 'phys', name: '物理', questions: 3, icon: 'fa-atom' },
+      { id: 'chem', name: '化学', questions: 3, icon: 'fa-flask' },
+      { id: 'jpn', name: '現代文', questions: 0, icon: 'fa-book' },
+      { id: 'cla', name: '古文', questions: 0, icon: 'fa-scroll' },
+      { id: 'chn', name: '漢文', questions: 0, icon: 'fa-pen-nib' }
+    ];
+
+    const START_YEAR = 2000;
+    const END_YEAR = 2025;
+    const TOTAL_YEARS = END_YEAR - START_YEAR + 1; // 26年分
+
+    // アプリデータ構造: { "math_2025": { status: 2, date: "2025-10-05", memo: "...", scores: [15,20,...] }, ... }
+    let appData = {};
+
+    // 開いているモーダルの対象キー
+    let currentEditingKey = null;
+
+    // --- 初期化 ---
+    function init() {
+      loadData();
+      renderUI();
+      setupEventListeners();
+    }
+
+    // --- データ保存・読み込み ---
+    function loadData() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try { appData = JSON.parse(saved); } catch (e) { appData = {}; }
+      }
+    }
+
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      updateOverallProgress();
+    }
+
+    // --- 日付フォーマットヘルパー ('25/10/05) ---
+    function formatDateShort(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return '';
+      const yy = parts[0].slice(-2);
+      return `'${yy}/${parts[1]}/${parts[2]}`;
+    }
+
+    // 今日の日付を取得 (YYYY-MM-DD)
+    function getTodayString() {
+      const d = new Date();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${d.getFullYear()}-${month}-${day}`;
+    }
+
+    // --- 全体プログレス計算 & 描画 ---
+    function updateOverallProgress() {
+      const totalTiles = SUBJECTS.length * TOTAL_YEARS;
+      let countStatus = [0, 0, 0, 0];
+
+      SUBJECTS.forEach(sub => {
+        for (let y = START_YEAR; y <= END_YEAR; y++) {
+          const key = `${sub.id}_${y}`;
+          const item = appData[key];
+          const st = item ? (item.status || 0) : 0;
+          countStatus[st]++;
+        }
+      });
+
+      const touched = countStatus[1] + countStatus[2] + countStatus[3];
+      const overallPercent = Math.round((touched / totalTiles) * 100);
+
+      document.getElementById('overall-percent').innerText = `${overallPercent}% (${touched}/${totalTiles})`;
+
+      // プログレスバーの比率更新
+      document.getElementById('bar-status-3').style.width = `${(countStatus[3] / totalTiles) * 100}%`;
+      document.getElementById('bar-status-2').style.width = `${(countStatus[2] / totalTiles) * 100}%`;
+      document.getElementById('bar-status-1').style.width = `${(countStatus[1] / totalTiles) * 100}%`;
+
+      // 各科目の進捗サマリー更新
+      SUBJECTS.forEach(sub => {
+        let subDone = 0;
+        for (let y = START_YEAR; y <= END_YEAR; y++) {
+          const item = appData[`${sub.id}_${y}`];
+          if (item && item.status > 0) subDone++;
+        }
+        const subPercent = Math.round((subDone / TOTAL_YEARS) * 100);
+        const countEl = document.getElementById(`sub-count-${sub.id}`);
+        const barEl = document.getElementById(`sub-bar-${sub.id}`);
+        if (countEl) countEl.innerText = `${subDone}/${TOTAL_YEARS}`;
+        if (barEl) barEl.style.width = `${subPercent}%`;
+      });
+    }
+
+    // --- UI構築 ---
+    function renderUI() {
+      const container = document.getElementById('subject-container');
+      container.innerHTML = '';
+
+      SUBJECTS.forEach(sub => {
+        // 科目アコーディオンカード
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all';
+
+        // アコーディオンヘッダー
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'w-full p-4 flex items-center justify-between text-left focus:outline-none hover:bg-slate-50 transition';
+        header.onclick = () => toggleAccordion(sub.id);
+
+        header.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm font-bold">
+              <i class="fa-solid ${sub.icon}"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-slate-800">${sub.name}</h2>
+              <div class="w-24 bg-slate-100 rounded-full h-1.5 overflow-hidden mt-1">
+                <div id="sub-bar-${sub.id}" class="bg-indigo-600 h-full transition-all duration-300" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="sub-count-${sub.id}" class="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">0/${TOTAL_YEARS}</span>
+            <i id="acc-icon-${sub.id}" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform duration-200"></i>
+          </div>
+        `;
+
+        // アコーディオンボディ
+        const body = document.createElement('div');
+        body.id = `acc-body-${sub.id}`;
+        body.className = 'hidden px-4 pb-4 border-t border-slate-100 pt-3';
+
+        // タイルグリッド (スマホ5列配置)
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-5 gap-2 sm:gap-2.5';
+
+        for (let y = START_YEAR; y <= END_YEAR; y++) {
+          const key = `${sub.id}_${y}`;
+          const tile = createTileElement(sub, y, key);
+          grid.appendChild(tile);
+        }
+
+        body.appendChild(grid);
+        card.appendChild(header);
+        card.appendChild(body);
+        container.appendChild(card);
+      });
+
+      updateOverallProgress();
+    }
+
+    // タイル単体のHTML生成
+    function createTileElement(subject, year, key) {
+      const data = appData[key] || { status: 0, date: '', memo: '', scores: [] };
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.id = `tile-${key}`;
+      
+      const statusClass = `status-${data.status || 0}`;
+      tile.className = `relative flex flex-col items-center justify-center w-full aspect-square rounded-xl border-2 transition-transform active:scale-95 shadow-xs ${statusClass}`;
+      tile.onclick = () => openModal(subject, year, key);
+
+      // 表示データの組み立て
+      const shortYear = `'${String(year).slice(-2)}`;
+      const formattedDate = formatDateShort(data.date);
+
+      // 点数合計の計算 (対象科目の場合)
+      let totalScoreText = '';
+      if (subject.questions > 0 && data.scores && data.scores.length > 0) {
+        const sum = data.scores.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0);
+        if (sum > 0) totalScoreText = `${sum}点`;
+      }
+
+      tile.innerHTML = `
+        ${totalScoreText ? `<span class="absolute top-1 right-1 bg-indigo-600 text-white text-[9px] font-black px-1 rounded scale-90 origin-top-right">${totalScoreText}</span>` : ''}
+        <span class="text-sm font-black tracking-tight">${shortYear}</span>
+        ${formattedDate ? `<span class="text-[9px] font-semibold opacity-75 mt-0.5 leading-none">${formattedDate}</span>` : ''}
+        ${data.memo ? `<span class="absolute bottom-1 left-1 w-1.5 h-1.5 rounded-full bg-slate-600"></span>` : ''}
+      `;
+
+      return tile;
+    }
+
+    // アコーディオンの開閉処理
+    function toggleAccordion(subId) {
+      const body = document.getElementById(`acc-body-${subId}`);
+      const icon = document.getElementById(`acc-icon-${subId}`);
+      
+      const isOpen = !body.classList.contains('hidden');
+      if (isOpen) {
+        body.classList.add('hidden');
+        icon.classList.remove('rotate-180');
+      } else {
+        body.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+      }
+    }
+
+    // タイル単体の個別更新
+    function updateTileUI(key) {
+      const [subId, yearStr] = key.split('_');
+      const year = Number(yearStr);
+      const subject = SUBJECTS.find(s => s.id === subId);
+      
+      const oldTile = document.getElementById(`tile-${key}`);
+      if (oldTile && oldTile.parentNode) {
+        const newTile = createTileElement(subject, year, key);
+        oldTile.parentNode.replaceChild(newTile, oldTile);
+      }
+    }
+
+    // --- モーダル（ポップアップ）制御 ---
+    function openModal(subject, year, key) {
+      currentEditingKey = key;
+      const data = appData[key] || { status: 0, date: '', memo: '', scores: [] };
+
+      // モーダルヘッダー設定
+      document.getElementById('modal-subject-tag').innerText = subject.name;
+      document.getElementById('modal-title').innerText = `${year}年`;
+
+      // ステータスボタンの設定
+      setModalStatus(data.status || 0);
+
+      // 日付の設定 (未入力の場合は今日の日付をデフォルトで提案)
+      const dateInput = document.getElementById('modal-date');
+      dateInput.value = data.date || '';
+
+      // メモの設定
+      const memoInput = document.getElementById('modal-memo');
+      memoInput.value = data.memo || '';
+      updateMemoCount();
+
+      // 大問点数欄の設定 (数学・物理・化学のみ)
+      const scoresSection = document.getElementById('section-scores');
+      const scoresGrid = document.getElementById('scores-grid');
+      scoresGrid.innerHTML = '';
+
+      if (subject.questions > 0) {
+        scoresSection.classList.remove('hidden');
+        const scores = data.scores || Array(subject.questions).fill('');
+
+        for (let i = 1; i <= subject.questions; i++) {
+          const val = scores[i - 1] !== undefined ? scores[i - 1] : '';
+          const field = document.createElement('div');
+          field.className = 'bg-slate-50 p-2 rounded-xl border border-slate-200 text-center';
+          field.innerHTML = `
+            <label class="block text-[10px] font-bold text-slate-400 mb-1">大問 ${i}</label>
+            <input type="number" min="0" max="200" data-qindex="${i - 1}" value="${val}" placeholder="0"
+              class="score-input w-full text-center font-bold text-slate-800 bg-white border border-slate-200 rounded-lg py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+          `;
+          scoresGrid.appendChild(field);
+        }
+        
+        // スコア入力イベントリスナーアタッチ
+        const inputs = scoresGrid.querySelectorAll('.score-input');
+        inputs.forEach(inp => inp.addEventListener('input', calculateModalTotalScore));
+        calculateModalTotalScore();
+      } else {
+        scoresSection.classList.add('hidden');
+      }
+
+      // モーダル表示
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+      currentEditingKey = null;
+    }
+
+    // モーダル内のステータスボタン選択補助
+    function setModalStatus(statusVal) {
+      const buttons = document.querySelectorAll('.status-btn');
+      buttons.forEach(btn => {
+        const st = Number(btn.getAttribute('data-status'));
+        if (st === statusVal) {
+          btn.classList.add('ring-2', 'ring-indigo-600', 'border-indigo-600', 'bg-indigo-50');
+        } else {
+          btn.classList.remove('ring-2', 'ring-indigo-600', 'border-indigo-600', 'bg-indigo-50');
+        }
+      });
+      document.getElementById('modal').setAttribute('data-current-status', statusVal);
+    }
+
+    // 大問合計の再計算
+    function calculateModalTotalScore() {
+      const inputs = document.querySelectorAll('.score-input');
+      let sum = 0;
+      inputs.forEach(inp => {
+        sum += Number(inp.value) || 0;
+      });
+      document.getElementById('modal-total-score').innerText = sum;
+    }
+
+    // メモ文字数カウント
+    function updateMemoCount() {
+      const memoInput = document.getElementById('modal-memo');
+      document.getElementById('memo-count').innerText = `${memoInput.value.length} / 100`;
+    }
+
+    // モーダルデータの保存
+    function saveModalData() {
+      if (!currentEditingKey) return;
+
+      const currentStatus = Number(document.getElementById('modal').getAttribute('data-current-status')) || 0;
+      const dateVal = document.getElementById('modal-date').value;
+      const memoVal = document.getElementById('modal-memo').value.trim();
+
+      // 得点の取得
+      const scoreInputs = document.querySelectorAll('.score-input');
+      let scoresArr = [];
+      if (scoreInputs.length > 0) {
+        scoreInputs.forEach(inp => {
+          scoresArr.push(inp.value !== '' ? Number(inp.value) : '');
+        });
+      }
+
+      // オブジェクトに反映
+      appData[currentEditingKey] = {
+        status: currentStatus,
+        date: dateVal,
+        memo: memoVal,
+        scores: scoresArr
+      };
+
+      saveData();
+      updateTileUI(currentEditingKey);
+      closeModal();
+
+      // 検索中なら結果も更新
+      performSearch();
+    }
+
+    // --- 検索機能 ---
+    function performSearch() {
+      const query = document.getElementById('search-input').value.trim().toLowerCase();
+      const resultsContainer = document.getElementById('search-results');
+      const clearBtn = document.getElementById('search-clear');
+
+      if (!query) {
+        resultsContainer.classList.add('hidden');
+        resultsContainer.innerHTML = '';
+        clearBtn.classList.add('hidden');
+        return;
+      }
+
+      clearBtn.classList.remove('hidden');
+      resultsContainer.classList.remove('hidden');
+      resultsContainer.innerHTML = '';
+
+      let matchCount = 0;
+
+      SUBJECTS.forEach(sub => {
+        for (let y = START_YEAR; y <= END_YEAR; y++) {
+          const key = `${sub.id}_${y}`;
+          const item = appData[key];
+          if (item && item.memo && item.memo.toLowerCase().includes(query)) {
+            matchCount++;
+            const resItem = document.createElement('div');
+            resItem.className = 'p-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 rounded-xl cursor-pointer transition flex items-start justify-between gap-2';
+            resItem.onclick = () => {
+              // 対象アコーディオンを開いてモーダルを立ち上げる
+              const body = document.getElementById(`acc-body-${sub.id}`);
+              if (body.classList.contains('hidden')) toggleAccordion(sub.id);
+              openModal(sub, y, key);
+            };
+
+            const formattedDate = formatDateShort(item.date);
+
+            resItem.innerHTML = `
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">${sub.name} ${y}年</span>
+                  ${formattedDate ? `<span class="text-[10px] text-slate-400 font-medium"><i class="fa-regular fa-calendar me-1"></i>${formattedDate}</span>` : ''}
+                </div>
+                <p class="text-xs text-slate-700 line-clamp-2">${escapeHtml(item.memo)}</p>
+              </div>
+              <i class="fa-solid fa-chevron-right text-slate-300 text-xs mt-1"></i>
+            `;
+            resultsContainer.appendChild(resItem);
+          }
+        }
+      });
+
+      if (matchCount === 0) {
+        resultsContainer.innerHTML = `<div class="text-center py-3 text-xs text-slate-400">「${escapeHtml(query)}」に一致するメモは見つかりませんでした</div>`;
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    // --- イベントリスナー設定 ---
+    function setupEventListeners() {
+      // モーダル内のステータスボタン切り替え
+      document.querySelectorAll('.status-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const statusVal = Number(e.currentTarget.getAttribute('data-status'));
+          setModalStatus(statusVal);
+
+          // 未習から変更され、日付が空の場合は自動で今日をセット
+          const dateInput = document.getElementById('modal-date');
+          if (statusVal > 0 && !dateInput.value) {
+            dateInput.value = getTodayString();
+          }
+        });
+      });
+
+      // 今日を入力をセットボタン
+      document.getElementById('btn-today').addEventListener('click', () => {
+        document.getElementById('modal-date').value = getTodayString();
+      });
+
+      // メモ文字数カウント
+      document.getElementById('modal-memo').addEventListener('input', updateMemoCount);
+
+      // モーダル閉じる/保存
+      document.getElementById('modal-close-icon').addEventListener('click', closeModal);
+      document.getElementById('modal-cancel').addEventListener('click', closeModal);
+      document.getElementById('modal-save').addEventListener('click', saveModalData);
+
+      // 検索バーのイベント
+      document.getElementById('search-input').addEventListener('input', performSearch);
+      document.getElementById('search-clear').addEventListener('click', () => {
+        document.getElementById('search-input').value = '';
+        performSearch();
+      });
+
+      // エクスポート（コピー）
+      document.getElementById('btn-export').addEventListener('click', () => {
+        const dataStr = JSON.stringify(appData);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(dataStr).then(() => {
+            alert('進捗データをクリップボードにコピーしました！\nメモ帳などに貼り付けてバックアップしてください。');
+          }).catch(() => fallbackCopy(dataStr));
+        } else {
+          fallbackCopy(dataStr);
+        }
+      });
+
+      // インポート（復元）
+      document.getElementById('btn-import').addEventListener('click', () => {
+        const jsonText = prompt('バックアップしたテキスト(JSON)を貼り付けてください:\n※現在のデータは上書きされます');
+        if (jsonText) {
+          try {
+            const parsed = JSON.parse(jsonText);
+            if (typeof parsed === 'object') {
+              appData = parsed;
+              saveData();
+              renderUI();
+              alert('データを正常に復元しました！');
+            } else {
+              throw new Error('Invalid format');
+            }
+          } catch (e) {
+            alert('読み込みエラー: 正しいデータフォーマットではありません。');
+          }
+        }
+      });
+    }
+
+    // クリップボードコピーのフォールバック
+    function fallbackCopy(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      alert('進捗データをコピーしました！');
+    }
+
+    // 起動
+    window.onload = init;
+  </script>
+</body>
+</html>
